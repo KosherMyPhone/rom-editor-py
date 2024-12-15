@@ -12,6 +12,7 @@ from rom_editor.logger import logger
 class Partition:
     name: str
     path: Path
+    mount_point: Path
 
 
 Partitions = list[Partition]
@@ -40,7 +41,7 @@ def _get_partition_info(path: Path) -> Partition:
         partition_name = "product"
     else:
         partition_name = "vendor"
-    return Partition(name=partition_name, path=partition_path)
+    return Partition(name=partition_name, path=partition_path, mount_point=path)
 
 
 def decompile_ext4(img_path: Path, output_dir: Path) -> Partition:
