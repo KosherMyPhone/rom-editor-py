@@ -84,11 +84,11 @@ def increase_ext4_size(img_path: Path, mb_to_add: int) -> None:
     """
     with img_path.open("ab") as f:
         f.write(b"\0" * (mb_to_add * 1024 * 1024))
-    subprocess.run([RESIZE2FS, img_path], check=True)
+    subprocess.run([RESIZE2FS, img_path], check=True, capture_output=True)
 
 
 def repair_ext4(img_path: Path) -> None:
-    subprocess.run([E2FSCK, "-yf", img_path], check=True)
+    subprocess.run([E2FSCK, "-yf", img_path], check=True, capture_output=True)
 
 
 def shrink_ext4(img_path: Path) -> None:
@@ -97,4 +97,4 @@ def shrink_ext4(img_path: Path) -> None:
     :param img_path: Path to the ext4 image
     :type img_path: Path
     """
-    subprocess.run([RESIZE2FS, "-M", img_path], check=True)
+    subprocess.run([RESIZE2FS, "-M", img_path], check=True, capture_output=True)
