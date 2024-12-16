@@ -5,7 +5,7 @@ import subprocess
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Union
 
 from rom_editor.constants import LPDUMP, LPMAKE, SEVENZIP
 from rom_editor.logger import logger
@@ -16,24 +16,14 @@ class SuperGroup:
     name: str
     maximum_size: int
 
-    def dict(self):
-        return {"name": self.name, "maximum_size": self.maximum_size}
-
 
 @dataclass
 class SuperSubPartition:
     """Not really sure if this belongs in super_utils, but I dont have a better place to put it"""
 
     name: str
-    group: SuperGroup
+    group: str
     attributes: str
-
-    def dict(self):
-        return {
-            "name": self.name,
-            "group": self.group.dict(),
-            "attributes": self.attributes,
-        }
 
 
 @dataclass
@@ -45,19 +35,7 @@ class SuperInfo:
     metadata_slot_count: int
     super_size: int
     partitions: List[SuperSubPartition]
-    groups: List[SuperGroup]
-
-    def dict(self):
-        info = {
-            "metadata_size": self.metadata_size,
-            "super_name": self.super_name,
-            "metadata_slot_count": self.metadata_slot_count,
-            "super_size": self.super_size,
-            "partitions": [partition.dict() for partition in self.partitions],
-            "groups": [group.dict() for group in self.groups],
-        }
-
-        return info
+    groups: Dict[str, SuperGroup]
 
 
 def get_super_info(super_img_path: Path) -> SuperInfo:
@@ -92,7 +70,7 @@ def get_super_info(super_img_path: Path) -> SuperInfo:
         # Create a Partition object and append to the list
         partition = SuperSubPartition(
             name=match.group("name").strip(),
-            group=groups[match.group("group").strip()],
+            group=match.group("group").strip(),
             attributes=match.group("attributes").strip(),
         )
         partitions.append(partition)
@@ -103,7 +81,7 @@ def get_super_info(super_img_path: Path) -> SuperInfo:
         metadata_slot_count=metadata_slot_count,
         super_size=super_size,
         partitions=partitions,
-        groups=list(groups.values()),
+        groups=groups,
     )
 
 
@@ -122,8 +100,8 @@ def compile_super(
     metadata_size: int,
     super_name: str,
     metadata_slot_count: int,
-    partitions: Dict[Path, SuperSubPartition],
-    groups: List[SuperGroup],
+    partitions: Dict[Path, Union[SuperSubPartition, Dict]],
+    groups: List[Union[SuperGroup, Dict]],
     output_path: Path,
     sparse: bool = True,
 ) -> None:
@@ -140,8 +118,10 @@ def compile_super(
     ]
     group_sizes = defaultdict(int)
     for path, partition in partitions.items():
+        if isinstance(partition, dict):
+            partition = SuperSubPartition(**partition)
         partition_size = path.stat().st_size
-        group_sizes[partition.group.name] += partition_size
+        group_sizes[partition.group] += partition_size
         # Now add the partitions to the command
         make_super_cmd += [
             "--partition",
