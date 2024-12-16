@@ -101,7 +101,7 @@ def compile_super(
     super_name: str,
     metadata_slot_count: int,
     partitions: Dict[Path, Union[SuperSubPartition, Dict]],
-    groups: List[Union[SuperGroup, Dict]],
+    groups: Dict[str, Union[SuperGroup, Dict]],
     output_path: Path,
     sparse: bool = True,
 ) -> None:
@@ -130,10 +130,12 @@ def compile_super(
             f"{partition.name}={path}",
         ]
 
-    for group in groups:
-        if group.name == "default":
+    for group_name, group in groups:
+        if isinstance(group, dict):
+            group = SuperGroup(**group)
+        if group_name == "default":
             continue
-        if group.name not in group_sizes:
+        elif group_name not in group_sizes:
             make_super_cmd += ["--group", f"{group.name}:{group.maximum_size}"]
         else:
             make_super_cmd += ["--group", f"{group.name}:{group_sizes[group.name]}"]
