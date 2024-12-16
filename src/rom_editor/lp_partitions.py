@@ -2,6 +2,7 @@
 
 import re
 import subprocess
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
@@ -137,12 +138,10 @@ def compile_super(
         "--metadata-slots",
         str(metadata_slot_count),
     ]
-    group_sizes = {}
+    group_sizes = defaultdict(int)
     for path, partition in partitions.items():
         partition_size = path.stat().st_size
-        group_sizes[partition.group.name] = (
-            group_sizes.get(partition.group.name, 0) + partition_size
-        )
+        group_sizes[partition.group.name] += partition_size
         # Now add the partitions to the command
         make_super_cmd += [
             "--partition",
