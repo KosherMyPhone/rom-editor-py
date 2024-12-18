@@ -130,7 +130,7 @@ def compile_super(
             f"{partition.name}={path}",
         ]
 
-    for group_name, group in groups:
+    for group_name, group in groups.items():
         if isinstance(group, dict):
             group = SuperGroup(**group)
         if group_name == "default":
