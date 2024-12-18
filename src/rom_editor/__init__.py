@@ -3,7 +3,7 @@ import time
 from rom_editor.logger import logger
 from rom_editor.utils import is_root
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 logger.debug(f"Starting kmp_rom_editor {__version__}")
 if not is_root():

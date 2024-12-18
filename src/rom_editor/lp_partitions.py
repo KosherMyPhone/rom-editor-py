@@ -34,7 +34,7 @@ class SuperInfo:
     super_name: str
     metadata_slot_count: int
     super_size: int
-    partitions: List[SuperSubPartition]
+    partitions: Dict[str, SuperSubPartition]
     groups: Dict[str, SuperGroup]
 
 
@@ -63,7 +63,7 @@ def get_super_info(super_img_path: Path) -> SuperInfo:
         )
         groups[group.name] = group
 
-    partitions: List[SuperSubPartition] = []
+    partitions: Dict[str, SuperSubPartition] = {}
     pattern = r"Name:\s*(?P<name>.+?)\s*Group:\s*(?P<group>.+?)\s*Attributes:\s*(?P<attributes>.+?)\s*Extents:"
     matches = re.finditer(pattern, out, re.DOTALL)
     for match in matches:
@@ -73,7 +73,7 @@ def get_super_info(super_img_path: Path) -> SuperInfo:
             group=match.group("group").strip(),
             attributes=match.group("attributes").strip(),
         )
-        partitions.append(partition)
+        partitions[partition.name] = partition
 
     return SuperInfo(
         metadata_size=metadata_size,
@@ -125,7 +125,7 @@ def compile_super(
         # Now add the partitions to the command
         make_super_cmd += [
             "--partition",
-            f"{partition.name}:{partition.attributes}:{partition_size}:{partition.group.name}",
+            f"{partition.name}:{partition.attributes}:{partition_size}:{partition.group}",
             "--image",
             f"{partition.name}={path}",
         ]
