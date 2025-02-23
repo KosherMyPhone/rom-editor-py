@@ -2,6 +2,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 from ast import Set
 from base64 import b64encode
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -91,9 +92,33 @@ class RomResigner:
                             )
         tree.write(mac_permissions_file)
 
-    def resign(self):
+    def _process_apk(self, file: Path, mac_permissions_signatures: Dict):
+        success, cert = self._get_cert(file)
+        if not success:
+            logger.debug(f"{file.name} - No Signature found => skipping")
+            self.skipped += 1
+            return
+        sig_to_use = self._verify_signature(cert, mac_permissions_signatures)
+        if not sig_to_use:
+            logger.debug(f"{file.name} - Unknown signature => skipping")
+            self.skipped += 1
+            return
+        if not self.signing_keys.get(sig_to_use):
+            logger.debug(f"{file.name} - No key found for {sig_to_use} => skipping")
+            self.skipped += 1
+            return
+        attrs = xattr.xattr(file)
+        current_context = attrs.get("security.selinux")
+        sign.sign_apk(file, self.signing_keys[sig_to_use])
+        self.used_signatures.add(sig_to_use)
+        logger.debug(f"{file.name} - Signed as {sig_to_use}")
+        attrs.set("security.selinux", current_context)
+        logger.debug(f"{file.name} - Restored context")
+        self.resigned += 1
+
+    def resign(self, use_threads: bool = False):
         for partition in self.partitions:
-            used_signatures = set()
+            self.used_signatures = set()
             mac_permissions_file = self._find_mac_permissions_file(partition)
             if not mac_permissions_file:
                 logger.debug(f"No mac permissions file found for {partition.name}")
@@ -106,33 +131,24 @@ class RomResigner:
             )
             to_sign = self._get_files_to_sign(partition)
             logger.debug(f"Found {len(to_sign)} files to sign for {partition.name}")
-            for file in to_sign:
-                success, cert = self._get_cert(file)
-                if not success:
-                    logger.debug(f"{file.name} - No Signature found => skipping")
-                    self.skipped += 1
-                    continue
-                sig_to_use = self._verify_signature(cert, mac_permissions_signatures)
-                if not sig_to_use:
-                    logger.debug(f"{file.name} - Unknown signature => skipping")
-                    self.skipped += 1
-                    continue
-                if not self.signing_keys.get(sig_to_use):
-                    logger.debug(
-                        f"{file.name} - No key found for {sig_to_use} => skipping"
-                    )
-                    self.skipped += 1
-                    continue
-                attrs = xattr.xattr(file)
-                current_context = attrs.get("security.selinux")
-                sign.sign_apk(file, self.signing_keys[sig_to_use])
-                used_signatures.add(sig_to_use)
-                logger.debug(f"{file.name} - Signed as {sig_to_use}")
-                attrs.set("security.selinux", current_context)
-                logger.debug(f"{file.name} - Restored context")
-                self.resigned += 1
+            futures: list[Future] = []
+            if use_threads:
+                with ThreadPoolExecutor() as executor:
+                    for file in to_sign:
+                        futures.append(
+                            executor.submit(
+                                self._process_apk, file, mac_permissions_signatures
+                            )
+                        )
+                    for future in futures:
+                        future.result()
+            else:
+                for file in to_sign:
+                    self._process_apk(file, mac_permissions_signatures)
 
-            self._update_mac_permissions_file(mac_permissions_file, used_signatures)
+            self._update_mac_permissions_file(
+                mac_permissions_file, self.used_signatures
+            )
             logger.debug(f"Updated mac permissions file for {partition.name}")
             logger.debug(
                 f"{self.resigned} signed; {self.skipped} skipped in partition {partition.name}"
